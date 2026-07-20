@@ -11,7 +11,6 @@ import { fileURLToPath } from "url";
 import { DeepgramLiveSTT } from "./deepgram-stt";
 import { SarvamLiveTTS } from "./sarvam-tts";
 import {
-  isEmergency,
   isNoiseUtterance,
   getSarvamVoiceId,
   SupportedLanguage,
@@ -57,20 +56,11 @@ export interface SessionState {
   isEnding?: boolean;
   isProcessingSpeech?: boolean;
   intent?: string;
-  step?: string;
   data?: Record<string, any>;
   callerNumber?: string;
   leadId?: string;
   contactEmail?: string;
   contactName?: string;
-  appointmentData?: {
-    patientName?: string;
-    department?: string;
-    symptoms?: string;
-    scheduledAt?: Date;
-    doctorPreference?: string;
-    dbSaved?: boolean;
-  };
   languageLocked: boolean;
   greetingPlayed?: boolean;
   lastInteractionAt?: number;
@@ -82,11 +72,6 @@ export interface SessionState {
   bargeInTranscript?: string | null;
   detectionCount?: number;
   lastDetectedLanguage?: string;
-  appointmentConfirmed?: boolean;
-  lastAppointment?: any;
-  pendingName?: string;
-  pendingPhone?: string;
-  pendingEmail?: string;
   speechQueue?: string[];
   responseId?: number;
   lastUserTranscript?: string;
@@ -136,7 +121,6 @@ function initializeSession(
     lastDetectedLanguage: "",
     audioQueue: [],
     bargeInTranscript: null,
-    step: "language_selection",
     speechQueue: [],
     responseId: 1,
     currentLLMRequestId: 0,
@@ -163,8 +147,7 @@ function createSilenceTimer(session: SessionState): NodeJS.Timeout {
       session.greetingPlayed &&
       session.languageLocked &&
       !session.bargeInDetected &&
-      session.step !== "language_selection" &&
-      now - lastAt > 10000
+      now - lastAt > 1000000
     ) {
       if (!session.silenceWarningSent) {
         session.silenceWarningSent = true;
@@ -504,7 +487,7 @@ async function processUserSpeech(session: SessionState, userText: string): Promi
   console.log("✅ processUserSpeech called");
   console.log("[PROCESS ENTRY]", {
     userText,
-    step: session.step,
+    languageLocked: session.languageLocked,
     language: session.language,
     processing: session.isProcessingSpeech
   });
@@ -516,43 +499,11 @@ async function processUserSpeech(session: SessionState, userText: string): Promi
   }
 
   const currentResponseId = session.responseId || 0;
-  const emergencyText = `${session.fullTranscript} ${transcript}`.toLowerCase();
-
-  // GLOBAL EMERGENCY TRANSFER (safety-critical)
-  if (isEmergency(emergencyText)) {
-    await prisma.transferIntent.upsert({
-      where: { callSid: session.callSid },
-      update: { intent: "emergency" },
-      create: { callSid: session.callSid, intent: "emergency" },
-    });
-
-    console.log("[TRANSFER DETECTED]", session.callSid, "emergency");
-
-    const emergencyTransferPrompt =
-      session.language === "hi-IN"
-        ? "कृपया लाइन पर बने रहें, मैं आपको आपातकालीन टीम से जोड़ रहा हूँ।"
-        : session.language === "kn-IN"
-          ? "ದಯವಿಟ್ಟು ಲೈನ್‌ನಲ್ಲಿ ಇರಿ, ನಾನು ನಿಮ್ಮನ್ನು ತುರ್ತು ವೈದ್ಯಕೀಯ ತಂಡಕ್ಕೆ ಸಂಪರ್ಕಿಸುತ್ತಿದ್ದೇನೆ."
-          : "Please stay on the line while I connect you to our emergency team.";
-
-    await safeSpeak(session, currentResponseId, emergencyTransferPrompt);
-    await waitForExotelFlush(session);
-
-    console.log("[TRANSFER] Closing voicebot for emergency transfer");
-
-    setTimeout(() => {
-      try {
-        session.ws?.close();
-      } catch { }
-    }, 1000);
-
-    return;
-  }
 
   // =============================
   // LANGUAGE SELECTION GATE
   // =============================
-  if (session.step === "language_selection") {
+  if (!session.languageLocked) {
     const langText = transcript.toLowerCase();
     let selectedLang: SupportedLanguage = SupportedLanguage.EN;
 
@@ -617,7 +568,6 @@ async function processUserSpeech(session: SessionState, userText: string): Promi
       }
 
       session.languageLocked = true;
-      session.step = undefined; // No more step-based flow
       session.lastInteractionAt = Date.now();
       session.lastSpeechAt = Date.now();
       session.silenceWarningSent = false;
@@ -629,10 +579,10 @@ async function processUserSpeech(session: SessionState, userText: string): Promi
       console.log("[Language] Locked:", session.language);
 
       const greetingByLanguage: Record<string, string> = {
-        "en-IN": "Thank you. How may I help you today?",
-        "hi-IN": "धन्यवाद। मैं आपकी कैसे मदद कर सकता हूँ?",
-        "kn-IN": "ಧನ್ಯವಾದಗಳು. ನಾನು ನಿಮಗೆ ಹೇಗೆ ಸಹಾಯ ಮಾಡಬಹುದು?",
-      };
+        "en-IN": "Thank you. Would you like to book an appointment, connect to emergency, or connect to the receptionist?",
+        "hi-IN": "धन्यवाद। क्या आप अपॉइंटमेंट बुक करना चाहेंगे, इमरजेंसी से जुड़ना चाहेंगे, या रिसेप्शनिस्ट से बात करना चाहेंगे?",
+        "kn-IN": "ಧನ್ಯವಾದಗಳು. ನೀವು ಅಪಾಯಿಂಟ್‌ಮೆಂಟ್ ಬುಕ್ ಮಾಡಲು ಬಯಸುವಿರಾ, ತುರ್ತು ವಿಭಾಗಕ್ಕೆ ಸಂಪರ್ಕಿಸಲು ಬಯಸುವಿರಾ, ಅಥವಾ ರಿಸೆಪ್ಷನಿಸ್ಟ್ ಜೊತೆ ಮಾತನಾಡಲು ಬಯಸುವಿರಾ?",
+       };
       const greeting = greetingByLanguage[session.language] || greetingByLanguage["en-IN"];
       await safeSpeak(session, currentResponseId, greeting);
       return;
@@ -788,6 +738,8 @@ export async function handleWebSocketMessage(ws: WebSocket, data: Buffer | strin
           process.env.DEFAULT_ORGANIZATION_ID ||
           "default";
         let agentId = params.agentId || params.agent_id || "";
+        let conversationId: string | undefined =
+          params.conversationId || params.conversation_id || undefined;
         const language = params.language || params.lang || SupportedLanguage.EN;
         let direction =
           params.direction ||
@@ -799,10 +751,12 @@ export async function handleWebSocketMessage(ws: WebSocket, data: Buffer | strin
 
         let recoveredLeadId: string | undefined;
         if ((!organizationId || !agentId) && callSid) {
+          if ((!organizationId || !agentId || !conversationId) && callSid) {
           try {
             const existingConversation = await prisma.conversation.findUnique({
               where: { twilioCallSid: callSid },
               select: {
+                id: true,
                 organizationId: true,
                 agentId: true,
                 callDirection: true,
@@ -815,6 +769,7 @@ export async function handleWebSocketMessage(ws: WebSocket, data: Buffer | strin
             if (existingConversation) {
               organizationId ||= existingConversation.organizationId;
               agentId ||= existingConversation.agentId;
+              conversationId ||= existingConversation.id;
               direction = existingConversation.callDirection || direction;
               callerNumber ||= existingConversation.phoneFrom || callerNumber;
               calledNumber ||= existingConversation.phoneTo || calledNumber;
@@ -822,6 +777,7 @@ export async function handleWebSocketMessage(ws: WebSocket, data: Buffer | strin
               console.log("[WS START] Recovered conversation metadata from DB", {
                 callSid,
                 organizationId,
+                conversationId,
                 agentId,
                 direction,
                 leadId: recoveredLeadId,
@@ -830,6 +786,12 @@ export async function handleWebSocketMessage(ws: WebSocket, data: Buffer | strin
           } catch (dbError: any) {
             console.error("[WS START] Failed to recover conversation metadata:", dbError);
           }
+        }
+        if (!conversationId) {
+          console.warn(
+            "[WS START] No conversationId available for this call — transcript will not be persisted",
+            { callSid },
+          );
         }
 
         // Check for orphan media
@@ -852,6 +814,7 @@ export async function handleWebSocketMessage(ws: WebSocket, data: Buffer | strin
         }
 
         session.callerNumber = callerNumber;
+        session.conversationId = conversationId;
         if (recoveredLeadId) {
           session.leadId = recoveredLeadId;
         }
@@ -899,7 +862,9 @@ export async function handleWebSocketMessage(ws: WebSocket, data: Buffer | strin
               !event.isFinal &&
               session.isAgentSpeaking &&
               !session.bargeInDetected &&
-              transcript.length > 2
+              !noise &&
+              transcript.length > 2 &&
+              (event.confidence === undefined || event.confidence >= 0.5)
             ) {
               console.log("[BARGE-IN] First interim detected");
               await interruptCurrentResponse(session);
@@ -944,6 +909,7 @@ export async function handleWebSocketMessage(ws: WebSocket, data: Buffer | strin
 
         break;
       }
+    }
 
       case "media": {
         const streamSid =
@@ -1012,12 +978,13 @@ export async function handleWebSocketMessage(ws: WebSocket, data: Buffer | strin
           session.exotelInBuffer = session.exotelInBuffer.subarray(TARGET_CHUNK);
 
           // Prevent bot voice loopback but preserve caller interruption audio
-          if (session.isAgentSpeaking && !session.bargeInDetected) {
-            if (session.audioQueue.length < 200) {
-              session.audioQueue.push(chunk);
-            }
-            continue;
-          }
+          // if (session.isAgentSpeaking && !session.bargeInDetected) {
+          //   if (session.audioQueue.length < 200) {
+          //     session.audioQueue.push(chunk);
+          //   }
+          //   continue;
+          // }
+          
           await session.stt.sendAudio(chunk);
         }
 

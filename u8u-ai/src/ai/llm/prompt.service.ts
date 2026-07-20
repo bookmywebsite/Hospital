@@ -105,15 +105,18 @@ export class PromptService {
     prompt += "- If the user asks multiple questions or requests in one utterance, include secondaryIntent or actions and handle both.\n";
     prompt += "- Return a stage field describing the current conversation phase (e.g. greeting, collecting_name, collecting_phone, waiting_confirmation, booking, finished).\n";
     prompt += "- Use conversationComplete=true only when the caller has finished and the call can be closed naturally.\n";
-    prompt += "- Only call lookup_doctor if department or doctorName exists.\n";
+    prompt += "- Only call lookup_doctor if doctorName, department, or specialty is available.\n";
     prompt += "- Only call book_appointment if patientName, phone, department, scheduledAt, and confirmation are all present.\n";
-    prompt += "- For hospital timing, insurance, parking, policies, packages, or lab questions, use retrieval before answering.\n";
-    prompt += "- If the user interrupts while collecting slots and provides a new piece of information, keep the remaining missing slots and continue collecting what is still needed.\n";
-    prompt += "- Ask for whichever required slot is most relevant. If the user already supplied department, do not ask for department again.\n";
-    prompt += "- After booking, rescheduling, or cancelling an appointment, ask 'Anything else I can help you with?' and only end the call after the user says no or goodbye.\n";
-    prompt += "- If the utterance is only a greeting, acknowledgment, or thanks, do not treat it as a new booking intent.\n";
+    prompt += "- Only call reschedule_appointment or cancel_appointment if the caller has explicitly confirmed the action and the appointment is known.\n";
+    prompt += "- If the user asks about hospital timing, insurance, parking, policies, packages, or lab tests, set requiresRetrieval=true and use retrieval before answering.\n";
+    prompt += "- If you choose toolCall, keep say short. The tool result will be used to generate the spoken reply.\n";
+    prompt += "- If information is missing for a booking, ask a single missing question.\n";
     prompt += "- Do not invent or hallucinate names, phone numbers, dates, departments, or confirmation responses.\n";
     prompt += "- Do not output XML or provider-specific function markup.\n";
+    prompt += "- The only allowed tool-call representation is the JSON object in toolCall. toolCall must be null when no execution is required.\n";
+    prompt += "- Only answer directly in say when no toolCall is appropriate.\n";
+    prompt += "- After booking, rescheduling, or cancelling an appointment, ask 'Anything else I can help you with?' and only end the call after the user says no or goodbye.\n";
+    prompt += "- If the utterance is only a greeting, acknowledgment, or thanks, do not treat it as a new booking intent.\n";
     prompt += "- The only allowed tool-call representation is the JSON object in toolCall.\n";
     return prompt;
   }

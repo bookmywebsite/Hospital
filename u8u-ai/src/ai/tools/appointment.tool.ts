@@ -1,13 +1,14 @@
 import { bookAppointment, rescheduleAppointment, cancelAppointment } from "../../services/appointment.service";
 import type { Tool, ToolContext } from "./types";
 import type { AppointmentSlots } from "../memory/types";
+import { prisma } from "../../lib/prisma";
 
-interface BookArgs {
+interface BookArgs extends AppointmentSlots {
   patientName: string;
   phone: string;
   department: string;
   scheduledAt: string; // ISO
-  reason?: string;
+  email?: string;
 }
 
 interface RescheduleArgs {
@@ -17,65 +18,6 @@ interface RescheduleArgs {
 
 interface CancelArgs {
   appointmentId?: string;
-}
-
-/**
- * Same patient-then-department-then-appointment sequence that used to run
- * inline in websocket-handler.ts (the "CREATE REAL APPOINTMENT IN DATABASE"
- * block, previously gated on `session.step === "completed"`). Logic unchanged;
- * only extracted so it's reusable from the planner's tool calls and testable
- * on its own.
- */
-async function createAppointment(args: BookArgs, ctx: ToolContext) {
-  const { session } = ctx;
-
-  if (!session.organizationId && !process.env.DEFAULT_ORGANIZATION_ID) {
-    throw new Error("Missing organizationId — cannot save appointment");
-  }
-  const organizationId = session.organizationId || process.env.DEFAULT_ORGANIZATION_ID!;
-
-  // Dedupe on (organizationId, phone) instead of always creating a new row —
-  // the schema already has a unique constraint here that plain `.create()` would violate
-  // on a repeat caller.
-  const patient = await prisma.patient.upsert({
-    where: { organizationId_phone: { organizationId, phone: args.phone } },
-    update: { fullName: args.patientName },
-    create: {
-      organizationId,
-      fullName: args.patientName,
-      phone: args.phone,
-    },
-  });
-
-  const department = await prisma.department.upsert({
-    where: { organizationId_name: { organizationId, name: args.department } },
-    update: {},
-    create: { organizationId, name: args.department },
-  });
-
-  const appointment = await prisma.appointment.create({
-    data: {
-      organizationId,
-      patientId: patient.id,
-      departmentId: department.id,
-      scheduledAt: new Date(args.scheduledAt),
-      appointmentType: "OPD",
-      status: "SCHEDULED",
-      bookedVia: "VOICE_AI",
-      notes: args.reason || session.fullTranscript,
-    },
-  });
-
-  if (session.conversationId) {
-    await prisma.conversation
-      .update({
-        where: { id: session.conversationId },
-        data: { patientId: patient.id },
-      })
-      .catch(() => null);
-  }
-
-  return { patientId: patient.id, departmentId: department.id, appointment };
 }
 
 export const bookAppointmentTool: Tool<BookArgs> = {
@@ -90,11 +32,14 @@ export const bookAppointmentTool: Tool<BookArgs> = {
       department: { type: "string", description: "Department or specialty, e.g. Cardiology" },
       scheduledAt: { type: "string", description: "ISO 8601 date-time" },
       reason: { type: "string", description: "Reason for visit / symptoms, if mentioned" },
+      email: { type: "string", description: "Patient's email address, if mentioned" },
     },
     required: ["patientName", "phone", "department", "scheduledAt"],
   },
   execute: async (args, ctx) => {
-    const result = await bookAppointment(args);
+    const result = await bookAppointment(args, ctx.session.organizationId, {
+      language: ctx.session.language,
+    });
 
     if (result.success && result.appointmentId) {
       ctx.memory.lastAppointment = {
@@ -102,6 +47,7 @@ export const bookAppointmentTool: Tool<BookArgs> = {
         phone: args.phone,
         department: args.department,
         scheduledAt: args.scheduledAt,
+        email: args.email,
         appointmentId: result.appointmentId,
       };
       ctx.memory.pendingConfirmation = undefined;

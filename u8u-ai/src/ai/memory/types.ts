@@ -79,6 +79,7 @@ export interface ConversationMemory {
   lastTool?: ToolCallRecord;
   lastToolResult?: unknown;
   lastAppointment?: AppointmentSlots & { appointmentId?: string };
+  lastKnowledgeLookup?: number;
 }
 
 export function createEmptyMemory(sessionId: string, language: SupportedLanguage): ConversationMemory {

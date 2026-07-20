@@ -21,17 +21,6 @@ export function getOrCreateMemory(session: SessionState): ConversationMemory {
   if (!anySession.memory) {
     anySession.memory = createEmptyMemory(session.callSid, session.language);
 
-    // One-time backfill from the legacy fields, so a call that started before
-    // this migration (or a call still touching legacy code during the phased
-    // rollout in the migration plan) doesn't lose what's already been said.
-    if (session.appointmentData) {
-      anySession.memory.filledSlots = {
-        patientName: session.appointmentData.patientName,
-        department: session.appointmentData.department,
-        scheduledAt: session.appointmentData.scheduledAt?.toISOString(),
-        reason: session.appointmentData.symptoms,
-      };
-    }
     if (session.callerNumber) {
       anySession.memory.filledSlots.phone = session.callerNumber;
     }

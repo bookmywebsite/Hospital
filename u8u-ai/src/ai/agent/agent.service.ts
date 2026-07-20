@@ -71,7 +71,16 @@ export class AgentService {
       finalResponse = "I'm sorry, could you repeat that?";
     }
 
-    recordTurn(memory, { role: "assistant", content: finalResponse, ts: Date.now() });
+    if (!finalResponse) {
+    finalResponse = "I'm sorry, could you repeat that?";
+}
+
+recordTurn(memory, {
+    role: "assistant",
+    content: finalResponse,
+    ts: Date.now(),
+});
+
     await maybeRefreshSummary(memory, summarize);
     await this.persistMemory(session, memory);
     await callbacks.speak(finalResponse);

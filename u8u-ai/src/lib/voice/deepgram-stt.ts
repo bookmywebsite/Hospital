@@ -59,7 +59,7 @@ export class DeepgramLiveSTT {
     this.encoding = config.encoding || "mulaw";
     this.sampleRate = config.sampleRate || 8000;
     this.onTranscript = onTranscript;
-    this.onError = onError || (() => { });
+    this.onError = onError || (() => {});
     this.onReady = onReady;
   }
 
@@ -75,12 +75,16 @@ export class DeepgramLiveSTT {
 
     try {
       const dgLang = getDeepgramLanguage(this.language);
+      const modelForLanguage =
+        dgLang === "kn" || dgLang === "hi" || dgLang === "te" ? "nova-3" : this.model;
       console.log("[DEEPGRAM LANGUAGE]", {
         originalLanguage: this.language,
         deepgramLanguage: dgLang,
+        model: modelForLanguage,
       });
       const options: any = {
-        model: this.model,
+        //model: this.model,
+        model: modelForLanguage,
         // ...(dgLang !== "multi" ? { language: dgLang } : {}),
         // detect_language: dgLang === "multi",
         language: dgLang,
@@ -131,7 +135,7 @@ export class DeepgramLiveSTT {
               );
 
               connection.socket.send(arrayBuffer);
-            } catch { }
+            } catch {}
           }
 
           this.pendingAudio = [];
@@ -140,10 +144,7 @@ export class DeepgramLiveSTT {
         // FIX: only call keepAlive(), never send("") — empty string closes the connection
         this.keepAliveTimer = setInterval(() => {
           try {
-            if (
-              this.connection === connection &&
-              typeof connection.keepAlive === "function"
-            ) {
+            if (this.connection === connection && typeof connection.keepAlive === "function") {
               connection.keepAlive();
             }
           } catch (e) {
@@ -213,7 +214,8 @@ export class DeepgramLiveSTT {
           if (confidence < 0.25) {
             return;
           }
-          if (!speechFinal) { // only process speechFinal to avoid duplicates
+          if (!speechFinal) {
+            // only process speechFinal to avoid duplicates
             return;
           }
 
@@ -288,7 +290,7 @@ export class DeepgramLiveSTT {
       if (typeof old.finish === "function") old.finish();
       else if (typeof old.requestClose === "function") old.requestClose();
       else if (typeof old.close === "function") old.close();
-    } catch (_) { }
+    } catch (_) {}
   }
 
   private _clearKeepAlive(): void {
@@ -319,7 +321,7 @@ export class DeepgramLiveSTT {
       // ✅ DEBUG: save raw audio for analysis
       if (process.env.DEBUG_AUDIO === "true") {
         const fs = await import("fs");
-        fs.appendFile("debug.raw", audioChunk, () => { });
+        fs.appendFile("debug.raw", audioChunk, () => {});
       }
       // const toSend =
       //   this.encoding === 'linear16'
@@ -479,7 +481,7 @@ export class DeepgramLiveSTT {
           `[STT] Replaying ${reconnectBuffer.length} chunks buffered during language switch`,
         );
         for (const chunk of reconnectBuffer) {
-          originalSendAudio(chunk).catch(() => { });
+          originalSendAudio(chunk).catch(() => {});
         }
         reconnectBuffer.length = 0;
       }

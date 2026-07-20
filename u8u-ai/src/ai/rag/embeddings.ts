@@ -9,7 +9,13 @@
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || "text-embedding-3-small";
 const EMBEDDING_API_KEY = process.env.EMBEDDING_API_KEY || process.env.OPENAI_API_KEY;
 
+const embeddingCache = new Map<string, number[]>();
 export async function embed(text: string): Promise<number[]> {
+  const cached = embeddingCache.get(text);
+
+if (cached) {
+    return cached;
+}
   if (!EMBEDDING_API_KEY) {
     throw new Error(
       "EMBEDDING_API_KEY (or OPENAI_API_KEY) is not set — required for RAG retrieval and knowledge ingestion.",

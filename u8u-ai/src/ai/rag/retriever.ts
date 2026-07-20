@@ -19,7 +19,21 @@ const RELEVANCE_FLOOR = 0.7;
 export async function retrieve(query: string, agentId: string, topK = 4): Promise<RetrievedChunk[]> {
   console.log("[RAG] Retrieving for query:", query, "for agent:", agentId);
   const startTime = Date.now();
-  const queryEmbedding = await embed(query);
+ let queryEmbedding: number[] | undefined;
+
+try{
+
+queryEmbedding=
+await embed(query);
+
+}
+catch(err){
+
+console.error(err);
+
+return[];
+
+}
 
   const chunks = await prisma.knowledgeChunk.findMany({
     where: { agentId },

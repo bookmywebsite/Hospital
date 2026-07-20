@@ -66,7 +66,7 @@ export class LlmService {
     ];
 
     const response = await this.provider.complete(messages, {
-      maxTokens: 120,
+      maxTokens: 200,
       temperature: 0.4,
     });
 
@@ -84,7 +84,7 @@ export class LlmService {
 
     const response = await this.provider.complete(messages, {
       model: "llama-3.1-8b-instant",
-      maxTokens: 200,
+      maxTokens: 300,
       temperature: 0.3,
       responseFormat: { type: "json_object" },
     });

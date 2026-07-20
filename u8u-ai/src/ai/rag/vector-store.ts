@@ -4,8 +4,8 @@ import type { RetrievedChunk } from "./retriever";
 export async function upsertChunk(agentId: string, content: string, embedding: number[], source?: string, category?: string) {
   return prisma.knowledgeChunk.upsert({
     where: { id: `${agentId}-${source ?? Math.random().toString(36).slice(2)}` },
-    create: { agentId, content, embedding, source, category },
-    update: { content, embedding, source, category, updatedAt: new Date() },
+    create: { agentId, agentName: agentId, content, embedding, source, category },
+    update: { agentName: agentId, content, embedding, source, category, updatedAt: new Date() },
   });
 }
 
