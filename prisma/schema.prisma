@@ -1,0 +1,997 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id             String        @id @default(cuid())
+  clerkId        String        @unique
+  email          String        @unique
+  firstName      String?
+  lastName       String?
+  imageUrl       String?
+  organizationId String?
+  role           String        @default("member")
+  timezone       String        @default("Asia/Kolkata")
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  teamMember     TeamMember?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+}
+
+model Organization {
+  id                   String           @id @default(cuid())
+  name                 String
+  slug                 String           @unique
+  logoUrl              String?
+  plan                 Plan             @default(FREE)
+  stripeCustomerId     String?          @unique
+  stripeSubscriptionId String?          @unique
+  conversationLimit    Int              @default(100)
+  conversationsUsed    Int              @default(0)
+  emailLimit           Int              @default(500)
+  emailsUsed           Int              @default(0)
+  aiMinutesLimit       Int              @default(5000)
+  aiMinutesUsed        Int              @default(0)
+  callStartHour        Int              @default(9)
+  callEndHour          Int              @default(21)
+  assignmentMode       String           @default("ROUND_ROBIN")
+  hospitalName         String?
+  defaultLanguages     String[]         @default(["EN", "HI"])
+  whatsappNumber       String?
+  twilioNumber         String?
+  conversationCount    Int              @default(0)
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  aiAgentMetrics       AIAgentMetrics[]
+  agents               Agent[]
+  appointments         Appointment[]
+  assignmentRules      AssignmentRule[]
+  CallLog              CallLog[]
+  callQueues           CallQueue[]
+  conversations        Conversation[]
+  dailyMetrics         DailyMetrics[]
+  departments          Department[]
+  emailSequences       EmailSequence[]
+  meetings             Meeting[]
+  patients             Patient[]
+  teamMembers          TeamMember[]
+  users                User[]
+}
+
+model Department {
+  id             String        @id @default(cuid())
+  organizationId String
+  name           String
+  code           String?
+  isActive       Boolean       @default(true)
+  totalLeads     Int           @default(0)
+  totalBookings  Int           @default(0)
+  totalRevenue   Int           @default(0)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  appointments   Appointment[]
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  doctors        Doctor[]
+  patients       Patient[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+model Doctor {
+  id             String        @id @default(cuid())
+  organizationId String
+  departmentId   String
+  name           String
+  specialization String?
+  availability   Json?
+  isActive       Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  appointments   Appointment[]
+  department     Department    @relation(fields: [departmentId], references: [id])
+
+  @@index([organizationId])
+  @@index([departmentId])
+}
+
+model Agent {
+  id                 String           @id @default(cuid())
+  organizationId     String
+  name               String           @default("MedAssist")
+  agentType          AgentType        @default(RECEPTION)
+  role               String           @default("Hospital AI Assistant")
+  avatarUrl          String?
+  voiceId            String?          @default("alloy")
+  enableChat         Boolean          @default(true)
+  enableEmail        Boolean          @default(false)
+  enableVoice        Boolean          @default(true)
+  enableWhatsapp     Boolean          @default(true)
+  personality        String           @default("friendly")
+  tone               String           @default("conversational")
+  systemPrompt       String?
+  welcomeMessage     String           @default("Hello! I'm MedAssist, your AI healthcare assistant. How can I help you today?")
+  languages          String[]         @default(["EN", "HI"])
+  companyName        String?
+  companyDescription String?
+  specializations    String[]         @default([])
+  calendlyUrl        String?
+  meetingDuration    Int              @default(30)
+  widgetColor        String           @default("#00c4ff")
+  widgetPosition     String           @default("bottom-right")
+  totalConversations Int              @default(0)
+  callsToday         Int              @default(0)
+  bookedToday        Int              @default(0)
+  conversionRate     Float            @default(0)
+  totalBooked        Int              @default(0)
+  leadsQualified     Int              @default(0)
+  isActive           Boolean          @default(true)
+  isDefault          Boolean          @default(false)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  aiAgentMetrics     AIAgentMetrics[]
+  organization       Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  callQueues         CallQueue[]
+  conversations      Conversation[]
+  emailSequences     EmailSequence[]
+  voiceCalls         VoiceCall[]
+  knowledgeBase      KnowledgeBase?
+
+  @@index([organizationId])
+  @@index([agentType])
+  @@index([organizationId, isDefault])
+}
+
+model Patient {
+  id                   String               @id @default(cuid())
+  organizationId       String
+  departmentId         String?
+  firstName            String?
+  lastName             String?
+  fullName             String?
+  phone                String?
+  email                String?
+  age                  Int?
+  gender               String?
+  tier                 LeadTier?
+  patientStatus        PatientStatus        @default(NEW)
+  tags                 String[]             @default([])
+  source               String?
+  intent               String?
+  preferredLanguage    String               @default("EN")
+  doNotContact         Boolean              @default(false)
+  totalVisits          Int                  @default(0)
+  lastVisitAt          DateTime?
+  isReturning          Boolean              @default(false)
+  aiTags               String[]             @default([])
+  aiIntent             String?
+  aiSentiment          String?
+  qualificationSummary String?
+  painPoints           String[]             @default([])
+  lastContactedAt      DateTime?
+  lastRespondedAt      DateTime?
+  lastCallAt           DateTime?
+  lastCallOutcome      String?
+  totalCalls           Int                  @default(0)
+  emailsSent           Int                  @default(0)
+  emailsOpened         Int                  @default(0)
+  assignedToId         String?
+  assignedAt           DateTime?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  activities           Activity[]
+  appointments         Appointment[]
+  callLogs             CallLog[]
+  callQueues           CallQueue[]
+  conversations        Conversation[]
+  emails               Email[]
+  assignedTo           TeamMember?          @relation(fields: [assignedToId], references: [id])
+  department           Department?          @relation(fields: [departmentId], references: [id])
+  organization         Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  reminderLogs         ReminderLog[]
+  sequenceEnrollments  SequenceEnrollment[]
+
+  @@unique([organizationId, phone])
+  @@index([organizationId])
+  @@index([patientStatus])
+  @@index([tier])
+  @@index([source])
+  @@index([departmentId])
+  @@index([organizationId, patientStatus])
+  @@index([organizationId, tier])
+  @@index([organizationId, source])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, departmentId, patientStatus])
+  @@index([organizationId, lastContactedAt])
+  @@index([organizationId, phone])
+}
+
+model Lead {
+  id                   String               @id @default(cuid())
+  organizationId       String
+  email                String
+  phone                String?
+  firstName            String?
+  lastName             String?
+  fullName             String?
+  company              String?
+  jobTitle             String?
+  linkedinUrl          String?
+  website              String?
+  companySize          String?
+  industry             String?
+  city                 String?
+  country              String?
+  score                Int?
+  tier                 LeadTier?
+  status               LeadStatus           @default(NEW)
+  budgetScore          Int?
+  authorityScore       Int?
+  needScore            Int?
+  timelineScore        Int?
+  painPoints           String[]             @default([])
+  interests            String[]             @default([])
+  objections           String[]             @default([])
+  buyingSignals        String[]             @default([])
+  qualificationSummary String?
+  source               String?
+  utmSource            String?
+  utmMedium            String?
+  utmCampaign          String?
+  lastContactedAt      DateTime?
+  lastRespondedAt      DateTime?
+  emailsSent           Int                  @default(0)
+  emailsOpened         Int                  @default(0)
+  tags                 String[]             @default([])
+  qualificationNotes   String?
+  doNotCall            Boolean              @default(false)
+  preferredLanguage    String               @default("EN")
+  lastCallAt           DateTime?
+  lastCallOutcome      String?
+  totalCalls           Int                  @default(0)
+  assignedToId         String?
+  assignedAt           DateTime?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  activities           Activity[]
+  callLogs             CallLog[]
+  callQueues           CallQueue[]
+  conversations        Conversation[]
+  emails               Email[]
+  assignedTo           TeamMember?          @relation(fields: [assignedToId], references: [id])
+  meetings             Meeting[]
+  sequenceEnrollments  SequenceEnrollment[]
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@index([status])
+  @@index([tier])
+  @@index([organizationId, status])
+  @@index([organizationId, tier])
+  @@index([organizationId, createdAt])
+  @@index([email])
+  @@index([phone])
+}
+
+model Appointment {
+  id              String            @id @default(cuid())
+  organizationId  String
+  patientId       String
+  departmentId    String?
+  doctorId        String?
+  scheduledAt     DateTime
+  duration        Int               @default(30)
+  timezone        String            @default("Asia/Kolkata")
+  appointmentType String            @default("OPD")
+  status          AppointmentStatus @default(SCHEDULED)
+  bookedVia       String?
+  bookedByAgent   String?
+  bookedAt        DateTime          @default(now())
+  notes           String?
+  outcome         String?
+  followUpNeeded  Boolean           @default(false)
+  billingAmount   Int?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  department      Department?       @relation(fields: [departmentId], references: [id])
+  doctor          Doctor?           @relation(fields: [doctorId], references: [id])
+  organization    Organization      @relation(fields: [organizationId], references: [id])
+  patient         Patient           @relation(fields: [patientId], references: [id])
+  reminders       ReminderLog[]
+
+  @@index([organizationId])
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([departmentId])
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([organizationId, scheduledAt])
+  @@index([organizationId, status])
+  @@index([organizationId, status, scheduledAt])
+  @@index([organizationId, doctorId, scheduledAt])
+  @@index([organizationId, patientId, scheduledAt])
+  @@index([organizationId, scheduledAt, status])
+}
+
+model ReminderLog {
+  id            String          @id @default(cuid())
+  appointmentId String
+  patientId     String
+  channel       ReminderChannel
+  status        ReminderStatus  @default(PENDING)
+  sentAt        DateTime?
+  deliveredAt   DateTime?
+  failedAt      DateTime?
+  errorMessage  String?
+  messageBody   String?
+  createdAt     DateTime        @default(now())
+  appointment   Appointment     @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  patient       Patient         @relation(fields: [patientId], references: [id])
+
+  @@index([appointmentId])
+  @@index([patientId])
+  @@index([status])
+}
+
+model Conversation {
+  id                    String              @id @default(cuid())
+  organizationId        String
+  agentId               String
+  patientId             String?
+  leadId                String?
+  channel               ConversationChannel
+  status                ConversationStatus  @default(ACTIVE)
+  sessionId             String?             @unique
+  twilioCallSid         String?             @unique
+  phoneFrom             String?
+  phoneTo               String?
+  callDuration          Int?
+  callDirection         CallDirection?
+  summary               String?
+  sentiment             String?
+  detectedIntent        String?
+  detectedLanguage      String?
+  state                 Json? // ConversationMemory snapshot (filledSlots, activeIntent, etc.) — lets a dropped/reconnected call resume with memory intact
+  appointmentBooked     Boolean             @default(false)
+  qualificationComplete Boolean             @default(false)
+  isTransferred         Boolean             @default(false)
+  messageCount          Int                 @default(0)
+  startedAt             DateTime            @default(now())
+  lastMessageAt         DateTime?
+  endedAt               DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  agent                 Agent               @relation(fields: [agentId], references: [id])
+  lead                  Lead?               @relation(fields: [leadId], references: [id])
+  organization          Organization        @relation(fields: [organizationId], references: [id])
+  patient               Patient?            @relation(fields: [patientId], references: [id])
+  messages              Message[]
+  voiceCalls            VoiceCall[]
+
+  @@index([organizationId])
+  @@index([patientId])
+  @@index([leadId])
+  @@index([channel])
+  @@index([status])
+  @@index([agentId])
+  @@index([organizationId, status])
+  @@index([organizationId, agentId])
+  @@index([organizationId, channel])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, lastMessageAt])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  role           String
+  content        String
+  senderType     String?
+  audioUrl       String?
+  intent         String?
+  sentiment      String?
+  toolCalls      Json?
+  quickActions   Json?
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+}
+
+model EmailSequence {
+  id             String               @id @default(cuid())
+  organizationId String
+  agentId        String?
+  name           String
+  description    String?
+  targetTier     LeadTier?
+  totalEnrolled  Int                  @default(0)
+  totalCompleted Int                  @default(0)
+  totalReplied   Int                  @default(0)
+  isActive       Boolean              @default(true)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  agent          Agent?               @relation(fields: [agentId], references: [id])
+  organization   Organization         @relation(fields: [organizationId], references: [id])
+  steps          EmailSequenceStep[]
+  enrollments    SequenceEnrollment[]
+
+  @@index([organizationId])
+}
+
+model EmailSequenceStep {
+  id              String        @id @default(cuid())
+  sequenceId      String
+  stepNumber      Int
+  name            String?
+  delayDays       Int           @default(0)
+  delayHours      Int           @default(0)
+  subjectTemplate String?
+  bodyTemplate    String?
+  useAI           Boolean       @default(true)
+  skipIfReplied   Boolean       @default(true)
+  skipIfMeeting   Boolean       @default(true)
+  totalSent       Int           @default(0)
+  totalOpened     Int           @default(0)
+  totalReplied    Int           @default(0)
+  isActive        Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  sequence        EmailSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+
+  @@unique([sequenceId, stepNumber])
+}
+
+model SequenceEnrollment {
+  id          String        @id @default(cuid())
+  sequenceId  String
+  leadId      String?
+  patientId   String?
+  currentStep Int           @default(1)
+  status      String        @default("active")
+  enrolledAt  DateTime      @default(now())
+  nextStepAt  DateTime?
+  completedAt DateTime?
+  lead        Lead?         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  patient     Patient?      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  sequence    EmailSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+
+  @@unique([sequenceId, leadId])
+  @@index([patientId])
+}
+
+model Email {
+  id             String      @id @default(cuid())
+  leadId         String?
+  patientId      String?
+  direction      String
+  subject        String
+  body           String
+  bodyHtml       String?
+  fromEmail      String
+  fromName       String?
+  toEmail        String
+  toName         String?
+  threadId       String?
+  sequenceId     String?
+  sequenceStep   Int?
+  status         EmailStatus @default(DRAFT)
+  intent         String?
+  sentiment      String?
+  suggestedReply String?
+  sendGridId     String?
+  openCount      Int         @default(0)
+  clickCount     Int         @default(0)
+  scheduledFor   DateTime?
+  sentAt         DateTime?
+  openedAt       DateTime?
+  repliedAt      DateTime?
+  bouncedAt      DateTime?
+  createdAt      DateTime    @default(now())
+  lead           Lead?       @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  patient        Patient?    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([patientId])
+}
+
+model Meeting {
+  id              String        @id @default(cuid())
+  organizationId  String
+  leadId          String
+  title           String
+  description     String?
+  startTime       DateTime
+  endTime         DateTime
+  duration        Int
+  timezone        String        @default("Asia/Kolkata")
+  meetingType     String
+  meetingUrl      String?
+  bookedBy        String
+  bookedVia       String?
+  status          MeetingStatus @default(SCHEDULED)
+  notes           String?
+  outcome         String?
+  calendlyEventId String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  lead            Lead          @relation(fields: [leadId], references: [id])
+  organization    Organization  @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([leadId])
+}
+
+model Activity {
+  id          String   @id @default(cuid())
+  leadId      String?
+  patientId   String?
+  type        String
+  title       String
+  description String?
+  actorType   String
+  actorId     String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  lead        Lead?    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  patient     Patient? @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([patientId])
+}
+
+model DailyMetrics {
+  id                      String       @id @default(cuid())
+  organizationId          String
+  date                    DateTime     @db.Date
+  totalLeads              Int          @default(0)
+  chatbotLeads            Int          @default(0)
+  whatsappLeads           Int          @default(0)
+  voiceLeads              Int          @default(0)
+  outboundLeads           Int          @default(0)
+  directLeads             Int          @default(0)
+  appointmentsScheduled   Int          @default(0)
+  appointmentsConfirmed   Int          @default(0)
+  appointmentsNoShow      Int          @default(0)
+  appointmentsRescheduled Int          @default(0)
+  remindersSent           Int          @default(0)
+  callsTotal              Int          @default(0)
+  callsInbound            Int          @default(0)
+  callsOutbound           Int          @default(0)
+  callsAnswered           Int          @default(0)
+  callsMissed             Int          @default(0)
+  callbacksDone           Int          @default(0)
+  callbacksBooked         Int          @default(0)
+  avgCallDurationSec      Int          @default(0)
+  activeChats             Int          @default(0)
+  whatsappSent            Int          @default(0)
+  whatsappDelivered       Int          @default(0)
+  conversionRate          Float        @default(0)
+  revenueToday            Int          @default(0)
+  monthlyRevenue          Int          @default(0)
+  aiAccuracy              Float        @default(0)
+  avgResponseTimeSec      Float        @default(0)
+  satisfactionScore       Float        @default(0)
+  faqAutoResolved         Int          @default(0)
+  emailsSent              Int          @default(0)
+  createdAt               DateTime     @default(now())
+  organization            Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, date])
+  @@index([organizationId])
+  @@index([date])
+}
+
+model AIAgentMetrics {
+  id             String       @id @default(cuid())
+  organizationId String
+  agentId        String
+  date           DateTime     @db.Date
+  callsOrChats   Int          @default(0)
+  booked         Int          @default(0)
+  conversionRate Float        @default(0)
+  languages      String[]     @default([])
+  createdAt      DateTime     @default(now())
+  agent          Agent        @relation(fields: [agentId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([agentId, date])
+  @@index([organizationId])
+  @@index([agentId])
+}
+
+model CallQueue {
+  id               String       @id @default(cuid())
+  organizationId   String
+  agentId          String
+  patientId        String?
+  leadId           String?
+  scheduledFor     DateTime     @default(now())
+  priority         Int          @default(5)
+  language         String       @default("EN")
+  status           CallStatus   @default(QUEUED)
+  isMissedCallback Boolean      @default(false)
+  attempts         Int          @default(0)
+  maxAttempts      Int          @default(3)
+  callSid          String?
+  lastAttemptAt    DateTime?
+  completedAt      DateTime?
+  notes            String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  agent            Agent        @relation(fields: [agentId], references: [id])
+  lead             Lead?        @relation(fields: [leadId], references: [id])
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  patient          Patient?     @relation(fields: [patientId], references: [id])
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([scheduledFor])
+}
+
+model CallLog {
+  id                  String        @id @default(cuid())
+  patientId           String?
+  leadId              String?
+  callSid             String        @unique
+  direction           CallDirection @default(OUTBOUND)
+  status              CallStatus    @default(QUEUED)
+  outcome             CallOutcome   @default(NO_OUTCOME)
+  fromNumber          String
+  toNumber            String
+  language            String        @default("EN")
+  duration            Int?
+  recordingUrl        String?
+  transcript          String?
+  sentiment           String?
+  isMissedCallback    Boolean       @default(false)
+  appointmentBookedId String?
+  startedAt           DateTime      @default(now())
+  answeredAt          DateTime?
+  endedAt             DateTime?
+  createdAt           DateTime      @default(now())
+  organizationId      String
+  lead                Lead?         @relation(fields: [leadId], references: [id])
+  Organization        Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  patient             Patient?      @relation(fields: [patientId], references: [id])
+
+  @@index([patientId])
+  @@index([leadId])
+  @@index([callSid])
+  @@index([direction])
+  @@index([status])
+  @@index([createdAt])
+  @@index([organizationId, createdAt])
+  @@index([organizationId])
+}
+
+model TeamMember {
+  id               String           @id @default(cuid())
+  organizationId   String
+  userId           String           @unique
+  isAvailable      Boolean          @default(true)
+  isOnline         Boolean          @default(false)
+  maxLeadsPerDay   Int              @default(50)
+  currentLeadCount Int              @default(0)
+  skills           String[]         @default([])
+  languages        String[]         @default(["EN"])
+  totalAssigned    Int              @default(0)
+  totalConverted   Int              @default(0)
+  lastAssignedAt   DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  assignmentRules  AssignmentRule[]
+  assignedLeads    Lead[]
+  assignedPatients Patient[]
+  organization     Organization     @relation(fields: [organizationId], references: [id])
+  user             User             @relation(fields: [userId], references: [id])
+
+  @@index([organizationId])
+}
+
+model AssignmentRule {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  priority       Int          @default(0)
+  isActive       Boolean      @default(true)
+  conditions     Json
+  assignToId     String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  assignTo       TeamMember?  @relation(fields: [assignToId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+}
+
+
+
+
+
+model ScheduledJob {
+  id           String    @id @default(cuid())
+  jobType      String
+  targetId     String
+  scheduledFor DateTime
+  timezone     String    @default("Asia/Kolkata")
+  status       String    @default("PENDING")
+  attempts     Int       @default(0)
+  lastError    String?
+  payload      Json
+  processedAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([status, scheduledFor])
+  @@index([jobType, status])
+  @@index([scheduledFor, status])
+}
+
+model VoiceCall {
+  id                   String        @id @default(cuid())
+  direction            String
+  callerNumber         String
+  calledNumber         String
+  status               String        @default("initiated")
+  duration             Int           @default(0)
+  transcript           String?
+  summary              String?
+  sentiment            String?
+  leadScore            String?
+  extractedData        Json?
+  recordingUrl         String?
+  twilioCallSid        String?       @unique
+  startedAt            DateTime?
+  endedAt              DateTime?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  appointmentBooked    Boolean       @default(false)
+  appointmentId        String?
+  bargeInCount         Int           @default(0)
+  connectedAt          DateTime?
+  conversationId       String?
+  detectedLanguage     String?       @default("en-IN")
+  deviatedFromLanguage Boolean       @default(false)
+  emergencyDetected    Boolean       @default(false)
+  organizationId       String?
+  recordingDuration    Int?
+  twilioStreamSid      String?
+  messages             CallMessage[]
+  conversation         Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  agentId              String?
+  agent                Agent?        @relation(fields: [agentId], references: [id])
+}
+
+model VoiceAgent {
+  id               String   @id @default(cuid())
+  organizationId   String
+  name             String
+  language         String   @default("en-IN")
+  voiceId          String   @default("en-IN-NeerjaNeural")
+  systemPrompt     String
+  greeting         String
+  qualifyQuestions String[] @default([])
+  transferNumber   String?
+  webhookUrl       String?
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  description      String?
+  emergencyNumbers String[] @default([])
+  enableBargein    Boolean  @default(true)
+  enableRecording  Boolean  @default(true)
+  enabledTools     String[] @default([])
+  farewellMessage  String   @default("Thank you for calling. Have a great day!")
+  isDefault        Boolean  @default(false)
+  knowledgeEnabled Boolean  @default(false)
+  maxCallDuration  Int      @default(900)
+  organizationId2  String
+  transferPrompt   String   @default("Let me connect you with our team.")
+  webhookEvents    String[] @default(["CALL_STARTED", "CALL_ENDED", "EMERGENCY", "TRANSFER"])
+}
+
+model KnowledgeChunk {
+  id             String   @id @default(cuid())
+  agentId        String
+  content        String
+  embedding      Float[]
+  source         String?
+  category       String? // e.g. department | doctor | timing | insurance | pricing | policy | faq | emergency | parking | location | lab | visiting_hours | packages | contact — optional pre-filter before similarity ranking
+  createdAt      DateTime @default(now())
+  agentName      String
+  relevanceScore Float    @default(1.0)
+  updatedAt      DateTime @updatedAt
+
+  @@index([agentId])
+}
+
+model KnowledgeBase {
+  id        String   @id @default(cuid())
+  agentId   String   @unique
+  content   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  agent Agent @relation(fields: [agentId], references: [id])
+}
+
+model CallMessage {
+  id        String   @id @default(cuid())
+  callId    String
+  role      String
+  content   String
+  createdAt DateTime @default(now())
+
+  call VoiceCall @relation(fields: [callId], references: [id])
+}
+
+model OutboundCampaign {
+  id                 String    @id @default(cuid())
+  organizationId     String
+  agentId            String
+  name               String
+  status             String    @default("draft")
+  contacts           Json
+  totalCalls         Int       @default(0)
+  completedCalls     Int       @default(0)
+  hotLeads           Int       @default(0)
+  warmLeads          Int       @default(0)
+  coldLeads          Int       @default(0)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  agentName          String
+  answeredCalls      Int       @default(0)
+  appointmentsBooked Int       @default(0)
+  completedAt        DateTime?
+  description        String?
+  languages          String[]  @default(["en-IN"])
+  scheduledAt        DateTime?
+  startedAt          DateTime?
+  totalContacts      Int       @default(0)
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+model TransferIntent {
+  id        String   @id @default(cuid())
+  callSid   String   @unique
+  intent    String
+  createdAt DateTime @default(now())
+}
+
+enum Plan {
+  FREE
+  STARTER
+  GROWTH
+  PRO
+}
+
+enum PatientStatus {
+  NEW
+  CONTACTED
+  ENGAGED
+  APPOINTMENT_PENDING
+  APPOINTMENT_CONFIRMED
+  VISITED
+  FOLLOW_UP
+  LOST
+  DO_NOT_CONTACT
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  ENGAGED
+  QUALIFIED
+  MEETING_SET
+  WON
+  LOST
+}
+
+enum LeadTier {
+  HOT
+  WARM
+  COLD
+}
+
+enum ConversationChannel {
+  CHAT
+  WHATSAPP
+  EMAIL
+  VOICE
+}
+
+enum ConversationStatus {
+  ACTIVE
+  WAITING
+  CLOSED
+  TRANSFERRED
+}
+
+enum EmailStatus {
+  DRAFT
+  QUEUED
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  REPLIED
+  BOUNCED
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  REMINDER_SENT
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+  RESCHEDULED
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum CallStatus {
+  QUEUED
+  RINGING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  BUSY
+  NO_ANSWER
+  CANCELLED
+}
+
+enum CallOutcome {
+  INTERESTED
+  NOT_INTERESTED
+  CALLBACK_REQUESTED
+  VOICEMAIL
+  WRONG_NUMBER
+  DO_NOT_CALL
+  APPOINTMENT_BOOKED
+  TRANSFERRED
+  NO_OUTCOME
+}
+
+enum CallDirection {
+  INBOUND
+  OUTBOUND
+  MISSED_CALLBACK
+}
+
+enum AgentType {
+  RECEPTION
+  FOLLOW_UP
+  WHATSAPP
+  WEBSITE_BOT
+}
+
+enum ReminderChannel {
+  WHATSAPP
+  SMS
+  VOICE_CALL
+  EMAIL
+}
+
+enum ReminderStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+}
