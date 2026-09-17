@@ -1,4 +1,4 @@
-import Cartesia from "@cartesia/cartesia-js";
+import Cartesia from "@cartesia/cartesia-js/index.js";
 import { SupportedLanguage } from "./language-detection";
 
 export interface TTSChunk {

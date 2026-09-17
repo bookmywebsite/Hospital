@@ -50,6 +50,14 @@ function getAuthCandidates() {
     header: `Basic ${Buffer.from(`${username}:${apiToken}`).toString("base64")}`,
   }));
 }
+function getExotelAuthHeaders() {
+  const authCandidates = getAuthCandidates();
+
+  return {
+    Authorization: authCandidates[0].header,
+    Accept: "application/json",
+  };
+}
 
 export function formatPhoneE164(phone: string, defaultCountry = "IN"): string {
   const digits = phone.replace(/\D/g, "");
@@ -355,38 +363,44 @@ export async function makeOutboundCall(options: {
 }
 
 export async function verifyConnection() {
-  const sid = process.env.EXOTEL_SID;
-  if (!sid) return { success: false, message: "EXOTEL_SID not set" };
-  const apiToken = process.env.EXOTEL_API_TOKEN;
-  if (!apiToken) return { success: false, message: "EXOTEL_API_TOKEN not set" };
   try {
-    const url = `${EXOTEL_API_BASE_URL}/v1/Accounts/${sid}/ExotelAccount.json`;
-    const authCandidates = getAuthCandidates();
-    for (let i = 0; i < authCandidates.length; i += 1) {
-      const auth = authCandidates[i];
-      const res = await fetch(url, {
-        headers: { Authorization: auth.header },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        return {
-          success: true,
-          message: `Exotel connected: ${data?.api_response?.account?.sid || sid}`,
-        };
-      }
-      if (res.status === 401 && i < authCandidates.length - 1) {
-        continue;
-      }
+    const sid = process.env.EXOTEL_SID;
+
+    if (!sid) {
       return {
         success: false,
-        message: `Exotel verification failed: ${res.status}`,
+        message: "Exotel SID is not configured",
       };
     }
-    return { success: false, message: "Exotel verification failed" };
-  } catch (error: any) {
+
+    const response = await fetch(
+      `${EXOTEL_API_BASE_URL}/v1/Accounts/${sid}`,
+      {
+        method: "GET",
+        headers: getExotelAuthHeaders(),
+      }
+    );
+
+    if (!response.ok) {
+      return {
+        success: false,
+        message: `Exotel verification failed: ${response.status}`,
+      };
+    }
+
+    const xml = await response.text();
+
+    const sidMatch = xml.match(/<Sid>(.*?)<\/Sid>/);
+
+    return {
+      success: true,
+      message: `Exotel connected: ${sidMatch?.[1] || sid}`,
+    };
+  } catch (error) {
     return {
       success: false,
-      message: error?.message ?? "Exotel verification failed",
+      message:
+        error instanceof Error ? error.message : "Exotel verification failed",
     };
   }
 }
