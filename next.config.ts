@@ -3,21 +3,27 @@ const nextConfig = {
   images: {
     domains: ['img.clerk.com', 'images.clerk.dev'],
   },
-  allowedDevOrigins: [
-    'aquarial-scrappingly-brittanie.ngrok-free.dev',
-  ],
+
+  allowedDevOrigins: process.env.NEXT_ALLOWED_DEV_ORIGINS
+    ? process.env.NEXT_ALLOWED_DEV_ORIGINS.split(',').map((origin) => origin.trim())
+    : [],
+
   experimental: {
     serverActions: {
-      allowedOrigins: [
-        'aquarial-scrappingly-brittanie.ngrok-free.dev',
-      ],
+      allowedOrigins: process.env.NEXT_ALLOWED_SERVER_ACTION_ORIGINS
+        ? process.env.NEXT_ALLOWED_SERVER_ACTION_ORIGINS
+            .split(',')
+            .map((origin) => origin.trim())
+        : [],
     },
   },
+
   eslint: {
-    ignoreDuringBuilds: true,  // ← disables ALL eslint during build
+    ignoreDuringBuilds: true,
   },
+
   typescript: {
-    ignoreBuildErrors: true,   // ← disables TypeScript errors during build
+    ignoreBuildErrors: true,
   },
 };
 
